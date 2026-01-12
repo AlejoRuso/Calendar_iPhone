@@ -1,0 +1,64 @@
+{
+  "display": {
+    "width": 1320,
+    "height": 2868
+  },
+  "layout": {
+    "top_offset": 900,
+    "day_radius": 12,
+    
+  
+    "month_spacing_x": 40,
+    "month_spacing_y": 0,
+    
+ 
+    "month_margin_x": 100,
+    "month_margin_y": 250,
+    
+
+    "day_spacing_x": 50,
+    "day_spacing_y": 40,
+    
+
+    "day_grid_padding_x": 20,
+    "day_grid_padding_y": 80
+  },
+  "colors": {
+    "background": "#000000",
+    "month_text": "#918E8EFF",
+    "future_day": "#333333",
+    "past_day": "#918E8EFF",
+    "current_day": "#90EE90",
+    "progress_background": "#333333",
+    "progress_fill": "#4CAF50",
+    "progress_text": "#FFFFFF"
+  },
+  "calendar": {
+    "months": [
+      " Янв", " Фев", " Мар", " Апр",
+      " Май", " Июн", " Июл", " Авг",
+      " Сен", " Окт", " Ноя", " Дек"
+    ],
+    "week_start": 0,
+    "show_numbers": false,
+    "month_text_align": "left"
+  },
+  "fonts": {
+    "month_size": 42,
+    "day_size": 20,
+    "progress_size": 36
+  },
+  "progress": {
+    "width_percent": 30,
+    "height": 50,
+    "margin": 600,
+    "position": "center"
+  },
+  "highlighted_ranges": [
+    {
+      "date": "2026-01-13",
+      "color": "#915803"
+    }
+  ],
+  "output": "calendar.png"
+}
