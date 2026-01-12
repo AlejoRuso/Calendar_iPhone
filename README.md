@@ -3,7 +3,7 @@
 
 [![Build Status](https://github.com/AlejoRuso/Calendar_iPhone/workflows/Deploy%20to%20GitHub%20Pages/badge.svg)](https://github.com/AlejoRuso/Calendar_iPhone/actions)
 [![GitHub Pages](https://img.shields.io/badge/GitHub-Pages-blue)](https://AlejoRuso.github.io/Calendar_iPhone/)
-[![GitHub Pages](https://img.shields.io/badge/python-3.10%252B-yellow.svg)](python-3.10)
+[![GitHub Pages](https://img.shields.io/badge/python-3.10-yellow.svg)](python-3.10)
 
 
 ✨ Особенности
