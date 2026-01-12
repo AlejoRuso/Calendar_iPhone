@@ -437,7 +437,7 @@ def main():
 </html>""")
     
     print(f"✓ HTML страница создана: index.html")
-    print(f"✓ Для использования в автоматизации: https://вашusername.github.io/calendar.png")
+    print(f"✓ Для использования в автоматизации: https://alejoruso.github.io/Calendar_iPhone/calendar.png")
 
 if __name__ == "__main__":
     main()

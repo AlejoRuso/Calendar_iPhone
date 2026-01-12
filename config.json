@@ -5,7 +5,7 @@
   },
   "layout": {
     "top_offset": 900,
-    "day_radius": 12,
+    "day_radius": 13,
     
   
     "month_spacing_x": 40,
@@ -44,14 +44,14 @@
     "month_text_align": "left"
   },
   "fonts": {
-    "month_size": 42,
+    "month_size": 46,
     "day_size": 20,
     "progress_size": 36
   },
   "progress": {
     "width_percent": 30,
     "height": 50,
-    "margin": 600,
+    "margin": 100,
     "position": "center"
   },
   "highlighted_ranges": [
