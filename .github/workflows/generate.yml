@@ -2,7 +2,7 @@ name: Generate Calendar Daily
 
 on:
   schedule:
-    - cron: '0 20 * * *'  # 21:00 UTC = 23:00 MSK
+    - cron: '0 20 * * *'  # 21:00 UTC = 00:00 MSK
   workflow_dispatch:
   push:
     branches: [ main ]
@@ -17,7 +17,6 @@ jobs:
   generate-calendar:
     runs-on: ubuntu-latest
     
-    # Добавляем переменные окружения для корректной работы с UTF-8
     env:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
@@ -27,21 +26,25 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        # Полностью обновляем репозиторий
-        fetch-depth: 0
     
-    - name: Setup Python with UTF-8
+    - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
     
-    - name: Install system dependencies (fonts)
+    - name: Install system fonts (кириллица)
       run: |
-        # Устанавливаем шрифты для поддержки кириллицы
+        echo "🔧 Установка шрифтов с поддержкой кириллицы..."
         sudo apt-get update
-        sudo apt-get install -y fonts-liberation fonts-dejavu-core ttf-mscorefonts-installer
-        echo "✅ Системные шрифты установлены"
+        sudo apt-get install -y \
+          fonts-dejavu-core \
+          fonts-dejavu-extra \
+          fonts-liberation \
+          fonts-noto-core \
+          fonts-noto-extra \
+          fonts-freefont-ttf
+        fc-cache -f -v
+        echo "✅ Шрифты установлены"
     
     - name: Install Python dependencies
       run: |
@@ -51,63 +54,55 @@ jobs:
     - name: Check environment
       run: |
         echo "🔍 Проверка окружения:"
-        echo "Python версия: $(python --version)"
-        echo "Кодировка Python: $(python -c 'import sys; print(sys.getdefaultencoding())')"
-        echo "Локаль: $(locale)"
-        echo "Содержимое директории:"
-        ls -la
-        echo "Проверка config.json:"
+        python --version
+        echo "Кодировка:"
+        python -c "import sys; print(sys.getdefaultencoding())"
+        echo "Шрифты:"
+        fc-list | grep -i "dejavu\|liberation\|noto" | head -10
+    
+    - name: Fix config encoding
+      run: |
+        echo "🔧 Проверка кодировки config.json..."
         if [ -f "config.json" ]; then
-          echo "✅ config.json найден"
-          echo "Первые 200 символов config.json:"
-          head -c 200 config.json
-          echo ""
-          echo "Кодировка файла:"
-          file -i config.json
+          # Убираем BOM если есть
+          sed -i '1s/^\xEF\xBB\xBF//' config.json 2>/dev/null || true
+          echo "✅ Кодировка исправлена"
         else
-          echo "❌ config.json не найден!"
+          echo "⚠ config.json не найден"
         fi
     
     - name: Generate calendar image
       run: |
         echo "🚀 Запуск генерации календаря..."
         python generate_calendar.py 2>&1 | tee generation.log
-        echo "📋 Логи генерации сохранены в generation.log"
+        echo "📋 Логи сохранены в generation.log"
         
-        # Проверяем наличие ошибок
+        # Проверяем ошибки
         if grep -q "❌" generation.log; then
-          echo "⚠ Обнаружены ошибки в логах"
-          cat generation.log | grep -A5 -B5 "❌"
+          echo "⚠ Обнаружены ошибки:"
+          grep -A5 -B5 "❌" generation.log
           exit 1
         fi
-        
-        echo "✅ Генерация завершена"
     
     - name: Verify generated image
       run: |
-        echo "🔍 Проверка сгенерированного изображения..."
+        echo "🔍 Проверка изображения..."
         if [ -f "calendar.png" ]; then
-          echo "✅ Изображение создано успешно"
-          echo "📏 Размер файла: $(wc -c < calendar.png) байт"
-          echo "📐 Разрешение: $(identify -format '%wx%h' calendar.png 2>/dev/null || echo 'Не удалось определить')"
+          echo "✅ Изображение создано"
+          echo "📏 Размер: $(wc -c < calendar.png) байт"
         else
-          echo "❌ Ошибка: calendar.png не найден"
-          echo "📄 Содержимое директории:"
-          ls -la
+          echo "❌ calendar.png не найден"
           exit 1
         fi
     
     - name: Create HTML redirect
       run: |
-        echo "🌐 Создание HTML страницы..."
         echo '<!DOCTYPE html>
         <html lang="ru">
         <head>
           <meta charset="UTF-8">
           <meta http-equiv="refresh" content="0; url=calendar.png">
           <link rel="icon" href="data:,">
-          <meta name="generated" content="$(date -u +"%Y-%m-%dT%H:%M:%SZ")">
-          <meta name="timezone" content="Europe/Moscow">
           <title>Календарь прогресса</title>
           <style>
             body { margin: 0; padding: 0; background: #000; }
@@ -118,45 +113,23 @@ jobs:
           <img src="calendar.png" alt="Календарь прогресса года">
         </body>
         </html>' > index.html
-        
-        echo "✅ HTML страница создана"
     
     - name: Commit and push changes
       run: |
-        echo "📤 Коммит и пуш изменений..."
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        
-        # Добавляем файлы
         git add calendar.png index.html generation.log 2>/dev/null || true
         
-        # Проверяем, есть ли изменения
         if git diff --cached --quiet; then
           echo "ℹ️ Нет изменений для коммита"
         else
-          # Коммит с временем по Москве
           MSK_TIME=$(TZ='Europe/Moscow' date +'%Y-%m-%d %H:%M')
           git commit -m "Auto-update: $MSK_TIME MSK [skip ci]"
-          
-          # Пуш изменений
           git push
-          echo "✅ Изменения запушены в репозиторий"
+          echo "✅ Изменения запушены"
         fi
-    
-    - name: Upload logs as artifact (on failure)
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: generation-logs
-        path: |
-          generation.log
-          config.json
-        retention-days: 7
     
     - name: Completion notice
       run: |
-        echo "🎉 Генерация календаря завершена!"
-        echo "🌐 Ссылка на изображение: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/calendar.png"
-        echo "⏰ Время запуска (UTC): $(date -u +'%H:%M')"
-        echo "🏙️ Время в Москве: $(TZ='Europe/Moscow' date +'%H:%M')"
-        echo "🔄 Следующий запуск: завтра в 21:00 UTC (00:00 MSK)"
+        echo "🎉 Генерация завершена!"
+        echo "🌐 Ссылка: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/calendar.png"
