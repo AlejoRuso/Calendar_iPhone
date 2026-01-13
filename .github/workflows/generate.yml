@@ -2,7 +2,7 @@ name: Generate Calendar Daily
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Ежедневно в полночь UTC
+    - cron: '0 20 * * *'  # Ежедневно в полночь UTC
   workflow_dispatch:  # Ручной запуск
 
 permissions:
