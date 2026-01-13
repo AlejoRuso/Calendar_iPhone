@@ -24,7 +24,7 @@
     "day_grid_padding_y": 80
   },
   "colors": {
-    "background": "#000000",
+    "background": "#0E0D0D",
     "month_text": "#918E8EFF",
     "future_day": "#333333",
     "past_day": "#918E8EFF",
@@ -321,7 +321,7 @@
       "Настоящее уникально",
       "Всё взаимосвязано"
     ],
-    "font_size": 50,
+    "font_size": 52,
     "color": "#918E8EFF",
     "align": "center",
     "position": "above_calendar",
