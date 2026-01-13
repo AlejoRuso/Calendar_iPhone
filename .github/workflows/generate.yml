@@ -32,40 +32,113 @@ jobs:
       with:
         python-version: '3.10'
     
-    - name: Install system fonts (кириллица)
+    - name: Install system fonts (кириллица + Arial)
       run: |
-        echo "🔧 Установка шрифтов с поддержкой кириллицы..."
+        echo "🔧 Установка шрифтов с поддержкой кириллицы и Arial..."
+        
+        # Принимаем лицензию автоматически
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+        echo "ttf-mscorefonts-installer msttcorefonts/present-mscorefonts-eula note" | sudo debconf-set-selections
+        
         sudo apt-get update
         sudo apt-get install -y \
-          fonts-dejavu-core \
-          fonts-dejavu-extra \
+          fonts-dejavu \
           fonts-liberation \
-          fonts-noto-core \
-          fonts-noto-extra \
-          fonts-freefont-ttf\
           fonts-liberation2 \
-          ttf-mscorefonts-installer \
+          fonts-noto \
+          fonts-noto-cjk \
+          fonts-noto-color-emoji \
+          fonts-freefont-ttf \
           fonts-crosextra-caladea \
-          fonts-crosextra-carlito
-
-        # Автоматически принимаем лицензию для MS Fonts
-        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
-        fc-cache -f -v
+          fonts-crosextra-carlito \
+          ttf-mscorefonts-installer \
+          fontconfig
+        
+        # Явно устанавливаем шрифты Noto с кириллицей
+        sudo apt-get install -y fonts-noto-extra fonts-noto-cjk fonts-noto-core
+        
+        # Перезагружаем кэш шрифтов
+        sudo fc-cache -f -v
         echo "✅ Шрифты установлены"
+        
+        # Проверяем установку
+        echo "🔍 Проверка шрифтов:"
+        fc-match Arial
+        fc-match "DejaVu Sans"
+        fc-match "Noto Sans"
+    
+    - name: Проверка установленных шрифтов
+      run: |
+        echo "🔍 Проверяем шрифты с кириллицей:"
+        fc-list :lang=ru | head -20 || echo "Не найдено шрифтов с поддержкой кириллицы"
+        echo ""
+        echo "🔍 Проверяем шрифты Arial:"
+        fc-list | grep -i arial || echo "Arial не найден"
+        echo ""
+        echo "🔍 Проверяем наличие файлов шрифтов:"
+        ls -la /usr/share/fonts/truetype/msttcorefonts/ 2>/dev/null | head -10 || echo "Папка msttcorefonts не найдена"
+        ls -la /usr/share/fonts/truetype/dejavu/ 2>/dev/null | head -10 || echo "Папка dejavu не найдена"
+        ls -la /usr/share/fonts/truetype/liberation/ 2>/dev/null | head -10 || echo "Папка liberation не найдена"
+        echo ""
+        echo "📊 Всего установленных шрифтов:"
+        fc-list | wc -l
     
     - name: Install Python dependencies
       run: |
         pip install Pillow
         echo "✅ Зависимости Python установлены"
     
+    - name: Проверка кодировки config.json
+      run: |
+        echo "🔍 Проверка кодировки config.json:"
+        file config.json
+        echo ""
+        echo "Первые 200 байт файла:"
+        head -c 200 config.json | od -c
+        echo ""
+        echo "Содержимое месяцев:"
+        python3 -c "
+import json
+try:
+    with open('config.json', 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    months = data.get('calendar', {}).get('months', [])
+    for i, month in enumerate(months):
+        print(f'{i+1:2d}. \"{month}\" (длина: {len(month)}, байты: {month.encode(\"utf-8\")})')
+except Exception as e:
+    print(f'Ошибка: {e}')
+        "
+    
     - name: Check environment
       run: |
         echo "🔍 Проверка окружения:"
         python --version
         echo "Кодировка:"
-        python -c "import sys; print(sys.getdefaultencoding())"
-        echo "Шрифты:"
-        fc-list | grep -i "dejavu\|liberation\|noto" | head -10
+        python -c "import sys; print('По умолчанию:', sys.getdefaultencoding()); print('Файловая система:', sys.getfilesystemencoding())"
+        echo "Локаль:"
+        python -c "import locale; print(locale.getlocale())"
+        echo "Доступные шрифты:"
+        python3 -c "
+from PIL import ImageFont, ImageDraw, Image
+import os
+
+test_paths = [
+    '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+]
+
+for path in test_paths:
+    if os.path.exists(path):
+        try:
+            font = ImageFont.truetype(path, 20)
+            print(f'✓ {path}')
+        except Exception as e:
+            print(f'✗ {path} (ошибка: {e})')
+    else:
+        print(f'✗ {path} (не найден)')
+        "
     
     - name: Fix config encoding
       run: |
@@ -97,6 +170,18 @@ jobs:
         if [ -f "calendar.png" ]; then
           echo "✅ Изображение создано"
           echo "📏 Размер: $(wc -c < calendar.png) байт"
+          echo "📐 Размеры:"
+          python3 -c "
+from PIL import Image
+try:
+    img = Image.open('calendar.png')
+    print(f'  Ширина: {img.width}px')
+    print(f'  Высота: {img.height}px')
+    print(f'  Формат: {img.format}')
+    print(f'  Режим: {img.mode}')
+except Exception as e:
+    print(f'  Ошибка при проверке: {e}')
+          "
         else
           echo "❌ calendar.png не найден"
           exit 1
@@ -140,3 +225,7 @@ jobs:
       run: |
         echo "🎉 Генерация завершена!"
         echo "🌐 Ссылка: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/calendar.png"
+        echo ""
+        echo "📊 Проверка результатов:"
+        echo "  - Изображение: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/calendar.png"
+        echo "  - Логи: https://github.com/${{ github.repository }}/blob/main/generation.log"

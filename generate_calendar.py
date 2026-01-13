@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Генератор прогрессивного календаря для iPhone с ротацией фраз дня
-Полная версия с методом calculate_month_dimensions
+Исправленная версия с поддержкой кириллицы
 """
 
 import json
@@ -18,6 +18,11 @@ import locale
 class CalendarGenerator:
     def __init__(self, config_path: str = "config.json"):
         """Инициализация с конфигурационным файлом"""
+        # Проверяем кодировку
+        print(f"🐍 Python версия: {sys.version}")
+        print(f"🔤 Кодировка по умолчанию: {sys.getdefaultencoding()}")
+        print(f"🔤 Кодировка файловой системы: {sys.getfilesystemencoding()}")
+        
         # Устанавливаем локаль для корректной работы с UTF-8
         self.setup_locale()
         
@@ -28,27 +33,8 @@ class CalendarGenerator:
         print(f"📂 Текущая директория: {os.getcwd()}")
         print(f"📄 Проверяю файл конфигурации: {config_path}")
         
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                self.config = json.load(f)
-            print(f"✅ Конфиг успешно загружен, кодировка: UTF-8")
-        except UnicodeDecodeError:
-            print("⚠ Ошибка кодировки UTF-8, пробую другие кодировки...")
-            for encoding in ['utf-8-sig', 'latin-1', 'cp1251']:
-                try:
-                    with open(config_path, 'r', encoding=encoding) as f:
-                        self.config = json.load(f)
-                    print(f"✅ Конфиг загружен с кодировкой: {encoding}")
-                    break
-                except UnicodeDecodeError:
-                    continue
-            else:
-                print("❌ Не удалось загрузить конфиг, создаю новый")
-                self.create_default_config()
-        except Exception as e:
-            print(f"❌ Ошибка при загрузке конфига: {e}")
-            print("⚠ Создаю конфиг по умолчанию")
-            self.create_default_config()
+        # Загружаем конфиг с правильной кодировкой
+        self.config = self.load_config_with_encoding(config_path)
         
         self.validate_and_apply_config()
         self.today = date.today()
@@ -63,6 +49,37 @@ class CalendarGenerator:
         if self.selected_quote:
             print(f"💬 Фраза дня #{self.quote_index}: {self.selected_quote[:60]}...")
         print(f"📊 Всего фраз в базе: {len(self.quotes_list)}")
+        
+        # Тестируем шрифты
+        self.test_fonts()
+    
+    def load_config_with_encoding(self, config_path):
+        """Загрузка конфига с попыткой разных кодировок"""
+        encodings = ['utf-8', 'utf-8-sig', 'cp1251', 'iso-8859-1', 'koi8-r']
+        
+        for encoding in encodings:
+            try:
+                with open(config_path, 'r', encoding=encoding) as f:
+                    config = json.load(f)
+                print(f"✅ Конфиг успешно загружен с кодировкой: {encoding}")
+                
+                # Проверяем, что месяцы читаются правильно
+                months = config.get('calendar', {}).get('months', [])
+                if months:
+                    print(f"📅 Месяцы в конфиге: {months}")
+                    for i, month in enumerate(months):
+                        print(f"   {i+1}. '{month}' (длина: {len(month)}, первый символ код: {ord(month[0]) if month else 'N/A'})")
+                
+                return config
+            except UnicodeDecodeError as e:
+                print(f"❌ Ошибка кодировки {encoding}: {e}")
+                continue
+            except json.JSONDecodeError as e:
+                print(f"❌ Ошибка JSON при кодировке {encoding}: {e}")
+                continue
+        
+        print("❌ Не удалось загрузить конфиг ни в одной кодировке, создаю новый")
+        return self.create_default_config()
     
     def setup_locale(self):
         """Настройка локали для корректной работы с UTF-8"""
@@ -181,6 +198,93 @@ class CalendarGenerator:
         print(f"✅ Настройки фразы:")
         print(f"   Отступы: ↑{self.quote_margin_top}px ↓{self.quote_margin_bottom}px ←{self.quote_margin_left}px →{self.quote_margin_right}px")
     
+    def test_fonts(self):
+        """Тестирование доступности шрифтов"""
+        print("🔤 Тестируем доступность шрифтов:")
+        test_fonts = [
+            ("Arial", "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf"),
+            ("DejaVu Sans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            ("Liberation Sans", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+            ("Noto Sans", "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
+            ("Ubuntu", "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf"),
+            ("FreeSans", "/usr/share/fonts/truetype/freefont/FreeSans.ttf"),
+        ]
+        
+        available_fonts = []
+        for name, path in test_fonts:
+            if os.path.exists(path):
+                available_fonts.append(name)
+                print(f"   ✓ {name}: {path}")
+            else:
+                print(f"   ✗ {name}: не найден")
+        
+        if available_fonts:
+            print(f"✅ Доступно {len(available_fonts)} шрифтов: {', '.join(available_fonts)}")
+        else:
+            print("⚠ Нет доступных шрифтов, будет использован стандартный")
+    
+    def get_font(self, size, font_type="regular"):
+        """Получение шрифта с поддержкой кириллицы"""
+        # Список шрифтов в порядке приоритета
+        font_paths = [
+            # Шрифты Microsoft (Arial)
+            "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+            "/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf",
+            "/usr/share/fonts/truetype/msttcorefonts/arial.ttf",
+            
+            # DejaVu (хорошая поддержка кириллицы)
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            
+            # Liberation Sans
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            
+            # Noto Sans (поддержка всех языков)
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+            
+            # Ubuntu
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
+            
+            # FreeSans
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+            
+            # Дополнительные пути
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/crosextra/carlito.ttf",
+        ]
+        
+        # Пробуем разные пути к шрифтам
+        for font_path in font_paths:
+            try:
+                if os.path.exists(font_path):
+                    font = ImageFont.truetype(font_path, size)
+                    # Тестируем шрифт с кириллицей
+                    test_text = "АаБбВвГг"
+                    try:
+                        bbox = font.getbbox(test_text)
+                        print(f"✅ Шрифт загружен: {os.path.basename(font_path)} (поддерживает кириллицу)")
+                    except:
+                        print(f"⚠ Шрифт загружен: {os.path.basename(font_path)} (возможно без кириллицы)")
+                    return font
+            except Exception as e:
+                continue
+        
+        # Если не нашли системные шрифты, пробуем стандартные
+        try:
+            font = ImageFont.truetype("arial.ttf", size)
+            print("✅ Шрифт Arial загружен из текущей директории")
+            return font
+        except:
+            pass
+        
+        # Последний вариант - встроенный шрифт
+        print("⚠ Не удалось загрузить ни один шрифт, использую стандартный")
+        return ImageFont.load_default()
+    
     def validate_and_fix_quotes(self):
         """Проверяет и исправляет проблемы с кодировкой в фразах"""
         fixed_quotes = []
@@ -263,10 +367,7 @@ class CalendarGenerator:
         temp_image = Image.new('RGB', (self.width, 100), color='black')
         temp_draw = ImageDraw.Draw(temp_image)
         
-        try:
-            font = ImageFont.truetype("arial.ttf", self.quote_font_size)
-        except:
-            font = ImageFont.load_default()
+        font = self.get_font(self.quote_font_size)
         
         left_boundary = self.quote_margin_left
         right_boundary = self.width - self.quote_margin_right
@@ -297,24 +398,7 @@ class CalendarGenerator:
         
         print(f"🎨 Начинаю отрисовку фразы: {self.selected_quote[:50]}...")
         
-        font = None
-        font_paths = [
-            "arial.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        ]
-        
-        for font_path in font_paths:
-            try:
-                font = ImageFont.truetype(font_path, self.quote_font_size)
-                print(f"✅ Шрифт загружен: {font_path}")
-                break
-            except:
-                continue
-        
-        if font is None:
-            print("⚠ Не удалось загрузить ни один шрифт, использую стандартный")
-            font = ImageFont.load_default()
+        font = self.get_font(self.quote_font_size)
         
         left_boundary = self.quote_margin_left
         right_boundary = self.width - self.quote_margin_right
@@ -398,10 +482,7 @@ class CalendarGenerator:
         
         if self.quote_show_number and len(self.quotes_list) > 1:
             number_text = f"Фраза {self.quote_index}/{len(self.quotes_list)}"
-            try:
-                small_font = ImageFont.truetype("arial.ttf", self.quote_font_size // 2)
-            except:
-                small_font = ImageFont.load_default()
+            small_font = self.get_font(self.quote_font_size // 2)
             
             try:
                 number_bbox = draw.textbbox((0, 0), number_text, font=small_font)
@@ -445,11 +526,12 @@ class CalendarGenerator:
                    x0: int, y0: int, width: int, height: int):
         """Отрисовка одного месяца"""
         month_name = self.months[month_idx]
-        try:
-            font = ImageFont.truetype("arial.ttf", 
-                                     self.config['fonts']['month_size'])
-        except:
-            font = ImageFont.load_default()
+        
+        # Получаем шрифт с поддержкой кириллицы
+        font = self.get_font(self.config['fonts']['month_size'])
+        
+        # Отладочная информация
+        print(f"📝 Месяц {month_idx+1}: '{month_name}' (длина: {len(month_name)}, байты: {month_name.encode('utf-8')})")
         
         if self.month_text_align == 'center':
             text_x = x0 + width // 2
@@ -461,13 +543,39 @@ class CalendarGenerator:
             text_x = x0 + 20
             anchor = "lm"
         
-        draw.text(
-            (text_x, y0 + 40),
-            month_name,
-            fill=self.colors['month_text'],
-            font=font,
-            anchor=anchor
-        )
+        # Тестируем шрифт перед отрисовкой
+        try:
+            test_bbox = font.getbbox(month_name)
+            print(f"📏 Шрифт поддерживает кириллицу: '{month_name}' размер {test_bbox[2]-test_bbox[0]}x{test_bbox[3]-test_bbox[1]}")
+        except:
+            print(f"⚠ Шрифт не поддерживает кириллицу для '{month_name}'")
+        
+        try:
+            draw.text(
+                (text_x, y0 + 40),
+                month_name,
+                fill=self.colors['month_text'],
+                font=font,
+                anchor=anchor
+            )
+            print(f"✅ Месяц '{month_name}' отрисован успешно")
+        except Exception as e:
+            print(f"❌ Ошибка при отрисовке месяца '{month_name}': {e}")
+            # Fallback: используем латинское название
+            fallback_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            fallback_name = fallback_names[month_idx]
+            try:
+                draw.text(
+                    (text_x, y0 + 40),
+                    fallback_name,
+                    fill=self.colors['month_text'],
+                    font=font,
+                    anchor=anchor
+                )
+                print(f"⚠ Использовано латинское название: {fallback_name}")
+            except:
+                pass
         
         cols = 7
         rows = 6
@@ -523,11 +631,7 @@ class CalendarGenerator:
             )
             
             if self.show_numbers:
-                try:
-                    day_font = ImageFont.truetype("arial.ttf", 
-                                                self.config['fonts']['day_size'])
-                except:
-                    day_font = ImageFont.load_default()
+                day_font = self.get_font(self.config['fonts']['day_size'])
                 
                 if color in ['#90EE90', '#4CAF50', '#FF9800', '#2196F3', '#F44336']:
                     text_color = 'white'
@@ -566,11 +670,7 @@ class CalendarGenerator:
             fill=self.colors['progress_fill']
         )
         
-        try:
-            font = ImageFont.truetype("arial.ttf", 
-                                     self.config['fonts']['progress_size'])
-        except:
-            font = ImageFont.load_default()
+        font = self.get_font(self.config['fonts']['progress_size'])
         
         progress_text = f"{self.progress_percent}%"
         text_bbox = draw.textbbox((0, 0), progress_text, font=font)
@@ -596,7 +696,6 @@ class CalendarGenerator:
         
         self.draw_quote(draw)
         
-        # Теперь этот метод существует!
         cols, rows, month_width, month_height = self.calculate_month_dimensions()
         
         print(f"📅 Отрисовываю 12 месяцев...")
@@ -665,9 +764,9 @@ class CalendarGenerator:
             },
             "calendar": {
                 "months": [
-                    "Январь", "Февраль", "Март", "Апрель",
-                    "Май", "Июнь", "Июль", "Август",
-                    "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+                    "Янв", "Фев", "Мар", "Апр",
+                    "Май", "Июн", "Июл", "Авг",
+                    "Сен", "Окт", "Ноя", "Дек"
                 ],
                 "week_start": 0,
                 "show_numbers": False,
