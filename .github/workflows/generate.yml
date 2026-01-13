@@ -42,7 +42,14 @@ jobs:
           fonts-liberation \
           fonts-noto-core \
           fonts-noto-extra \
-          fonts-freefont-ttf
+          fonts-freefont-ttf\
+          fonts-liberation2 \
+          ttf-mscorefonts-installer \
+          fonts-crosextra-caladea \
+          fonts-crosextra-carlito
+
+        # Автоматически принимаем лицензию для MS Fonts
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
         fc-cache -f -v
         echo "✅ Шрифты установлены"
     
