@@ -1,4 +1,4 @@
-name: Deploy Calendar to Pages
+name: Generate Calendar Daily
 
 on:
   schedule:
@@ -7,12 +7,19 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
-  build-and-deploy:
+  generate:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
     
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -24,35 +31,34 @@ jobs:
         sudo apt-get update
         echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
         sudo apt-get install -y fonts-dejavu fonts-liberation fonts-noto ttf-mscorefonts-installer
-        sudo fc-cache -f -v
         pip install Pillow
     
     - name: Generate calendar
       run: |
         python generate_calendar.py
     
-    - name: Create website files
+    - name: Prepare files
       run: |
-        # Создаем минимальный index.html
-        cat > index.html << 'EOF'
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <title>Calendar</title>
-                    </head>
-                    <body>
-                        <h1>Calendar Progress</h1>
-                        <img src="calendar.png" alt="Calendar">
-                    </body>
-                    </html>
-                    EOF
+        # Удаляем старые файлы
+        rm -f calendar.png index.html .nojekyll
         
         # Создаем .nojekyll
         touch .nojekyll
+        
+        # Проверяем что calendar.png создан
+        if [ ! -f "calendar.png" ]; then
+          echo "❌ calendar.png not generated!"
+          exit 1
+        fi
     
-    - name: Deploy
+    - name: Deploy with GitHub Pages action
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         branch: main
         folder: ./
+        clean: true
+        clean-exclude: |
+          .github/
+          config.json
+          generate_calendar.py
+          *.py
