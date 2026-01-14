@@ -26,8 +26,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
     
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -69,96 +67,27 @@ jobs:
           exit 1
         fi
     
-    - name: Prepare GitHub Pages files
+    - name: Create HTML redirect
       run: |
-        # Создаем .nojekyll файл для отключения обработки Jekyll
-        echo "" > .nojekyll
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0; url=calendar.png"><title>Calendar</title></head><body><img src="calendar.png"></body></html>' > index.html
+    
+    - name: Create .nojekyll file
+      run: |
+        echo "Creating .nojekyll file..."
+        touch .nojekyll
+        echo "File created"
+    
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add calendar.png index.html .nojekyll generation.log 2>/dev/null || true
         
-        # Создаем index.html с правильной структурой
-        cat > index.html << 'HTML'
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Календарь прогресса года</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            font-family: Arial, sans-serif;
-        }
-        .container {
-            text-align: center;
-        }
-        img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
-        .footer {
-            color: #666;
-            margin-top: 20px;
-            font-size: 14px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <img src="calendar.png" alt="Календарь прогресса года" id="calendar-image">
-        <div class="footer">Обновлено: <span id="update-time"></span></div>
-    </div>
-    <script>
-        // Обновляем время последнего обновления
-        document.getElementById('update-time').textContent = new Date().toLocaleString('ru-RU');
-        
-        // Автообновление каждые 5 минут
-        setInterval(() => {
-            const img = document.getElementById('calendar-image');
-            img.src = img.src.split('?')[0] + '?t=' + new Date().getTime();
-        }, 300000);
-    </script>
-</body>
-</html>
-HTML
-        echo "✅ Файлы для GitHub Pages созданы"
-    
-    - name: List generated files
-      run: |
-        echo "📂 Сгенерированные файлы:"
-        ls -la *.png *.html .nojekyll 2>/dev/null || echo "Файлы не найдены"
-    
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./
-        publish_branch: main
-        force_orphan: false
-        enable_jekyll: false
-        cname: ""
-        commit_message: "Auto-update: $(date -u +'%Y-%m-%d %H:%M') UTC"
-    
-    - name: Verify deployment
-      run: |
-        echo "🎉 Деплой завершен!"
-        echo "🌐 Ваш сайт доступен по адресу:"
-        echo "   https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-        echo ""
-        echo "📊 Проверьте:"
-        echo "  1. Откройте https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-        echo "  2. Проверьте наличие файлов:"
-        echo "     - calendar.png"
-        echo "     - index.html"
-        echo "     - .nojekyll"
-        echo ""
-        echo "⚠️  Если страница все еще показывает 404:"
-        echo "  1. Подождите 1-2 минуты"
-        echo "  2. Проверьте настройки GitHub Pages: Settings → Pages"
-        echo "  3. Убедитесь, что выбран branch: main и folder: / (root)"
+        if git diff --cached --quiet; then
+          echo "ℹ️ Нет изменений для коммита"
+        else
+          MSK_TIME=$(TZ='Europe/Moscow' date +'%Y-%m-%d %H:%M')
+          git commit -m "Auto-update: $MSK_TIME MSK [skip ci]"
+          git push
+          echo "✅ Изменения запушены"
+        fi
