@@ -76,10 +76,12 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add calendar.png index.html generation.log 2>/dev/null || true
+        
         if git diff --cached --quiet; then
-          echo "No changes to commit"
+          echo "ℹ️ Нет изменений для коммита"
         else
           MSK_TIME=$(TZ='Europe/Moscow' date +'%Y-%m-%d %H:%M')
           git commit -m "Auto-update: $MSK_TIME MSK [skip ci]"
           git push
+          echo "✅ Изменения запушены"
         fi
