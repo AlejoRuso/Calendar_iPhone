@@ -2,252 +2,84 @@ name: Generate Calendar Daily
 
 on:
   schedule:
-    - cron: '0 20 * * *'  # Запуск ежедневно в 20:00 UTC
-  workflow_dispatch:       # Ручной запуск
+    - cron: '0 20 * * *'
+  workflow_dispatch:
   push:
     branches: [ main ]
+    paths:
+      - 'config.json'
+      - 'generate_calendar.py'
 
 permissions:
   contents: write
 
 jobs:
-  generate:
+  generate-calendar:
     runs-on: ubuntu-latest
+    
+    env:
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: 1
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
     
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
     
-    - name: Install system dependencies
+    - name: Install system fonts
       run: |
+        echo "Installing fonts..."
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
         sudo apt-get update
-        sudo apt-get install -y \
-          fonts-dejavu \
-          fonts-liberation \
-          fonts-noto \
-          fonts-noto-cjk \
-          fonts-noto-color-emoji
-      
+        sudo apt-get install -y fonts-dejavu fonts-liberation fonts-noto ttf-mscorefonts-installer
+        sudo fc-cache -f -v
+    
     - name: Install Python dependencies
       run: |
-        pip install Pillow==10.0.0
+        pip install Pillow
     
-    - name: Create generate_calendar.py
+    - name: Fix config encoding
       run: |
-        cat > generate_calendar.py << 'EOF'
-        from PIL import Image, ImageDraw, ImageFont
-        import datetime
-        import json
-        import os
-
-        # Загрузка конфигурации
-        with open('config.json', 'r', encoding='utf-8') as f:
-            config = json.load(f)
-
-        # Параметры изображения
-        width, height = 800, 600
-        image = Image.new('RGB', (width, height), color='white')
-        draw = ImageDraw.Draw(image)
-
-        # Попытка загрузки шрифтов
-        font_paths = [
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-            '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-            '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
-        ]
-        
-        font = None
-        for path in font_paths:
-            if os.path.exists(path):
-                try:
-                    font = ImageFont.truetype(path, 36)
-                    break
-                except:
-                    continue
-        
-        if font is None:
-            font = ImageFont.load_default()
-
-        # Текущая дата
-        today = datetime.datetime.now()
-        current_month = today.month
-        current_day = today.day
-
-        # Заголовок
-        month_names = [
-            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-        ]
-        title = f"{month_names[current_month-1]} {today.year}"
-        title_bbox = draw.textbbox((0, 0), title, font=font)
-        title_x = (width - (title_bbox[2] - title_bbox[0])) // 2
-        draw.text((title_x, 50), title, fill='black', font=font)
-
-        # Отображение дней месяца
-        days_in_month = (datetime.date(today.year, current_month % 12 + 1, 1) - 
-                        datetime.timedelta(days=1)).day
-        
-        cell_size = 40
-        start_x = (width - (7 * cell_size)) // 2
-        start_y = 150
-        
-        # Дни недели
-        weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-        for i, day in enumerate(weekdays):
-            x = start_x + i * cell_size + cell_size // 2
-            draw.text((x, start_y - 30), day, fill='gray', font=font, anchor='mm')
-
-        # Заполнение календаря
-        first_day = datetime.date(today.year, current_month, 1)
-        start_offset = first_day.weekday()  # 0=Понедельник, 6=Воскресенье
-        
-        for day in range(1, days_in_month + 1):
-            row = (start_offset + day - 1) // 7
-            col = (start_offset + day - 1) % 7
-            
-            x = start_x + col * cell_size + cell_size // 2
-            y = start_y + row * cell_size + cell_size // 2
-            
-            color = 'blue' if day == current_day else 'black'
-            draw.text((x, y), str(day), fill=color, font=font, anchor='mm')
-            
-            # Обводка для текущего дня
-            if day == current_day:
-                rect_x1 = x - cell_size // 2 + 5
-                rect_y1 = y - cell_size // 2 + 5
-                rect_x2 = x + cell_size // 2 - 5
-                rect_y2 = y + cell_size // 2 - 5
-                draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], outline='blue', width=2)
-
-        # Сохранение
-        image.save('calendar.png', 'PNG')
-        print(f"✅ Календарь сохранен как calendar.png")
-        EOF
+        if [ -f "config.json" ]; then
+          sed -i '1s/^\xEF\xBB\xBF//' config.json 2>/dev/null || true
+        fi
     
-    - name: Create config.json
+    - name: Generate calendar image
       run: |
-        cat > config.json << 'EOF'
-        {
-          "title": "Мой календарь",
-          "language": "ru",
-          "show_weekends": true,
-          "weekend_color": "red"
-        }
-        EOF
-    
-    - name: Generate calendar
-      run: |
-        python generate_calendar.py
-        
-        # Проверяем результат
-        if [ -f "calendar.png" ]; then
-          echo "✅ calendar.png успешно создан"
-          ls -lh calendar.png
-        else
-          echo "❌ calendar.png не создан"
+        python generate_calendar.py 2>&1 | tee generation.log
+        if grep -q "❌" generation.log; then
+          echo "Errors found"
           exit 1
         fi
     
-    - name: Create website
+    - name: Verify generated image
       run: |
-        cat > index.html << 'EOF'
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Calendar Progress</title>
-            <style>
-                body {
-                    margin: 0;
-                    padding: 20px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                }
-                .container {
-                    background: white;
-                    padding: 30px;
-                    border-radius: 20px;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                    text-align: center;
-                    max-width: 900px;
-                }
-                h1 {
-                    color: #333;
-                    margin-bottom: 20px;
-                }
-                .calendar-image {
-                    border-radius: 10px;
-                    border: 5px solid #4a5568;
-                    max-width: 100%;
-                    height: auto;
-                }
-                .timestamp {
-                    margin-top: 20px;
-                    color: #666;
-                    font-size: 14px;
-                }
-                .info {
-                    background: #f7fafc;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin-top: 20px;
-                    font-size: 14px;
-                    color: #4a5568;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>📅 Calendar Progress</h1>
-                <div class="info">
-                    Автоматически обновляется ежедневно в 20:00 UTC
-                </div>
-                <img src="calendar.png" alt="Current Calendar" class="calendar-image">
-                <div class="timestamp">
-                    Последнее обновление: <span id="current-time"></span>
-                </div>
-            </div>
-            
-            <script>
-                document.getElementById('current-time').textContent = 
-                    new Date().toLocaleString('ru-RU', {
-                        timeZone: 'UTC',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        timeZoneName: 'short'
-                    });
-            </script>
-        </body>
-        </html>
-        EOF
-        
-        # Создаем .nojekyll для GitHub Pages
-        touch .nojekyll
+        if [ -f "calendar.png" ]; then
+          echo "Image created: $(wc -c < calendar.png) bytes"
+        else
+          echo "calendar.png not found"
+          exit 1
+        fi
     
-    - name: Deploy to GitHub Pages
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        branch: main
-        folder: ./
-        clean: true
-        clean-exclude: |
-          .github/
-          config.json
-          generate_calendar.py
-          *.py
+    - name: Create HTML redirect
+      run: |
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0; url=calendar.png"><title>Calendar</title></head><body><img src="calendar.png"></body></html>' > index.html
+    
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add calendar.png index.html generation.log 2>/dev/null || true
+        if git diff --cached --quiet; then
+          echo "No changes to commit"
+        else
+          MSK_TIME=$(TZ='Europe/Moscow' date +'%Y-%m-%d %H:%M')
+          git commit -m "Auto-update: $MSK_TIME MSK [skip ci]"
+          git push
+        fi
