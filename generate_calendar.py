@@ -37,7 +37,7 @@ class CalendarGenerator:
         self.config = self.load_config_with_encoding(config_path)
         
         self.validate_and_apply_config()
-        self.today = date.today()
+        self.today = date.today()+ timedelta(days=1)
         self.year = self.config.get('year', self.today.year)
         self.calculate_progress()
         
