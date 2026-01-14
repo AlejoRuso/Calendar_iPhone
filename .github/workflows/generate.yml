@@ -18,7 +18,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
     
     - name: Setup Python
@@ -33,25 +32,66 @@ jobs:
         sudo apt-get install -y fonts-dejavu fonts-liberation fonts-noto ttf-mscorefonts-installer
         pip install Pillow
     
+    - name: Debug - List files before generation
+      run: |
+        echo "📂 Содержимое директории до генерации:"
+        ls -la
+        echo "🔍 Проверяем config.json:"
+        if [ -f "config.json" ]; then
+          echo "✅ config.json существует"
+          head -20 config.json
+        else
+          echo "❌ config.json не найден"
+        fi
+    
     - name: Generate calendar
       run: |
-        python generate_calendar.py
+        echo "🔄 Запуск generate_calendar.py..."
+        python generate_calendar.py 2>&1
+        
+        echo "📂 Содержимое директории после генерации:"
+        ls -la
+        
+        # Проверяем наличие calendar.png
+        if [ -f "calendar.png" ]; then
+          echo "✅ calendar.png создан успешно"
+          echo "📏 Размер файла: $(wc -c < calendar.png) байт"
+        else
+          echo "❌ calendar.png не найден!"
+          echo "🔍 Ищем другие файлы:"
+          find . -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" 2>/dev/null || echo "Изображений не найдено"
+          exit 1
+        fi
     
-    - name: Prepare files
+    - name: Create website files
       run: |
-        # Удаляем старые файлы
-        rm -f calendar.png index.html .nojekyll
+        echo "📄 Создаем файлы для сайта..."
         
         # Создаем .nojekyll
         touch .nojekyll
         
-        # Проверяем что calendar.png создан
-        if [ ! -f "calendar.png" ]; then
-          echo "❌ calendar.png not generated!"
-          exit 1
-        fi
+        # Создаем index.html
+        cat > index.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Calendar Progress</title>
+            <style>
+                body { margin: 0; padding: 0; background: #000; }
+                img { display: block; margin: 0 auto; max-width: 100%; }
+            </style>
+        </head>
+        <body>
+            <img src="calendar.png" alt="Calendar Progress">
+        </body>
+        </html>
+        EOF
+        
+        echo "✅ Файлы созданы:"
+        ls -la *.html .nojekyll 2>/dev/null || echo "Файлы не найдены"
     
-    - name: Deploy with GitHub Pages action
+    - name: Deploy to GitHub Pages
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         branch: main
