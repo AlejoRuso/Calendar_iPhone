@@ -1,4 +1,4 @@
-name: Generate Calendar Daily
+name: Deploy Calendar to Pages
 
 on:
   schedule:
@@ -6,88 +6,53 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-    paths:
-      - 'config.json'
-      - 'generate_calendar.py'
-
-permissions:
-  contents: write
 
 jobs:
-  generate-calendar:
+  build-and-deploy:
     runs-on: ubuntu-latest
     
-    env:
-      LC_ALL: C.UTF-8
-      LANG: C.UTF-8
-      PYTHONIOENCODING: utf-8
-      PYTHONUTF8: 1
-    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
     
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
     
-    - name: Install system fonts
+    - name: Install dependencies
       run: |
-        echo "Installing fonts..."
-        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
         sudo apt-get update
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
         sudo apt-get install -y fonts-dejavu fonts-liberation fonts-noto ttf-mscorefonts-installer
         sudo fc-cache -f -v
-    
-    - name: Install Python dependencies
-      run: |
         pip install Pillow
     
-    - name: Fix config encoding
+    - name: Generate calendar
       run: |
-        if [ -f "config.json" ]; then
-          sed -i '1s/^\xEF\xBB\xBF//' config.json 2>/dev/null || true
-        fi
+        python generate_calendar.py
     
-    - name: Generate calendar image
+    - name: Create website files
       run: |
-        python generate_calendar.py 2>&1 | tee generation.log
-        if grep -q "❌" generation.log; then
-          echo "Errors found"
-          exit 1
-        fi
-    
-    - name: Verify generated image
-      run: |
-        if [ -f "calendar.png" ]; then
-          echo "Image created: $(wc -c < calendar.png) bytes"
-        else
-          echo "calendar.png not found"
-          exit 1
-        fi
-    
-    - name: Create HTML redirect
-      run: |
-        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0; url=calendar.png"><title>Calendar</title></head><body><img src="calendar.png"></body></html>' > index.html
-    
-    - name: Create .nojekyll file
-      run: |
-        echo "Creating .nojekyll file..."
-        touch .nojekyll
-        echo "File created"
-    
-    - name: Commit and push changes
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add calendar.png index.html .nojekyll generation.log 2>/dev/null || true
+        # Создаем минимальный index.html
+        cat > index.html << 'EOF'
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Calendar</title>
+                    </head>
+                    <body>
+                        <h1>Calendar Progress</h1>
+                        <img src="calendar.png" alt="Calendar">
+                    </body>
+                    </html>
+                    EOF
         
-        if git diff --cached --quiet; then
-          echo "ℹ️ Нет изменений для коммита"
-        else
-          MSK_TIME=$(TZ='Europe/Moscow' date +'%Y-%m-%d %H:%M')
-          git commit -m "Auto-update: $MSK_TIME MSK [skip ci]"
-          git push
-          echo "✅ Изменения запушены"
-        fi
+        # Создаем .nojekyll
+        touch .nojekyll
+    
+    - name: Deploy
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        branch: main
+        folder: ./
